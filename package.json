@@ -9,7 +9,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -p packages/common/tsconfig.json",
     "clean": "node scripts/clean.js",
     "db:setup": "node scripts/init-db.cjs",
     "sync:package": "node scripts/sync-package.cjs",
@@ -20,7 +20,7 @@
     "test": "node scripts/test-all.js",
     "test:all": "node scripts/test-all.js",
     "test:acceptance": "node --test scripts/production-infrastructure.test.js",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -p packages/common/tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
