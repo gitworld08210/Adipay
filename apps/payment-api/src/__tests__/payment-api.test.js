@@ -593,19 +593,22 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
 
       assert.equal(updateRes.status, 200);
       assert.equal(updateRes.body.webhookUrl, receiverUrl);
-      assert.equal(updateRes.body.webhookSecret, customSecret);
+      assert.equal(updateRes.body.webhookSecret, undefined, 'the secret is write-only and never echoed');
+      assert.equal(updateRes.body.hasWebhookSecret, true);
 
       // 3. Read back via GET /api/v1/admin/merchant-settings
       const getMerchantRes = await request('/api/v1/admin/merchant-settings');
       assert.equal(getMerchantRes.status, 200);
       assert.equal(getMerchantRes.body.webhookUrl, receiverUrl);
-      assert.equal(getMerchantRes.body.webhookSecret, customSecret);
+      assert.equal(getMerchantRes.body.webhookSecret, undefined);
+      assert.equal(getMerchantRes.body.hasWebhookSecret, true);
 
       // 4. Also read back via GET /api/v1/admin/all-settings
       const getAllRes = await request('/api/v1/admin/all-settings');
       assert.equal(getAllRes.status, 200);
       assert.equal(getAllRes.body.webhookUrl, receiverUrl);
-      assert.equal(getAllRes.body.webhookSecret, customSecret);
+      assert.equal(getAllRes.body.webhookSecret, undefined);
+      assert.equal(getAllRes.body.hasWebhookSecret, true);
 
       // 5. Create a payment session
       const createRes = await request('/api/v1/payments', {
@@ -613,6 +616,9 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
         body: {
           orderId: 'WEBHOOK-TEST-ORD-1',
           amount: '450.00',
+          // Manual confirmation is only for cash/card at the counter; UPI is
+          // proven by the bank observer and cannot be confirmed by hand.
+          method: 'CASH_COUNTER',
           autoActivate: true
         }
       });
@@ -671,7 +677,8 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
       assert.equal(partialUpdate.status, 200);
       assert.equal(partialUpdate.body.businessName, 'Preserved Store LLC');
       assert.equal(partialUpdate.body.webhookUrl, receiverUrl);
-      assert.equal(partialUpdate.body.webhookSecret, customSecret);
+      assert.equal(partialUpdate.body.webhookSecret, undefined);
+      assert.equal(partialUpdate.body.hasWebhookSecret, true, 'a partial update must keep the stored secret');
 
     } finally {
       await new Promise(cb => mockReceiver.close(cb));

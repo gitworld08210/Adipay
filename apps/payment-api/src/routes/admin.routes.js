@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { HttpServer } from '../server.js';
 import { PaymentStatus, PaymentMethod, SellingMode, AuditActorType, isValidVpa, toRupeesString, deriveCloudflareRoutes, resolveRuntimeUrls } from '@youpi/common';
 import { PaymentVerificationPipeline } from '@youpi/core';
+import { validateWebhookUrl } from '@youpi/common';
 import { globalTunnelManager } from '../services/tunnel-manager.js';
 import { formatQrDataUrl } from '../services/whatsapp-berry.service.js';
 
@@ -104,6 +105,30 @@ export function registerAdminRoutes(server, ctx) {
       ? ctx.merchantRepo.getDefault()
       : (ctx.merchantRepo.findById('00000000-0000-0000-0000-000000000001') || ctx.merchantRepo.findAll()[0]);
   };
+
+  // POST /api/v1/admin/webhook-secret/rotate
+  // The webhook signing secret is write-only: it is generated here, returned
+  // ONCE in this response, and never readable again. Put it in the receiving
+  // system (e.g. the Supabase function) immediately.
+  server.post('/api/v1/admin/webhook-secret/rotate', async (req, res) => {
+    const merchant = resolveMerchant(req);
+    if (!merchant) {
+      HttpServer.json(res, 404, { error: 'Merchant not found' });
+      return;
+    }
+    const secret = crypto.randomBytes(32).toString('hex');
+    ctx.merchantRepo.update(merchant.id, { webhookSecret: secret });
+    ctx.auditRepo?.log({
+      merchantId: merchant.id,
+      entityType: 'MERCHANT',
+      entityId: merchant.id,
+      action: 'WEBHOOK_SECRET_ROTATED',
+      actorType: AuditActorType.ADMIN,
+      details: {}
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ webhookSecret: secret, shownOnce: true }));
+  });
 
   // GET /api/v1/admin/queue
   server.get('/api/v1/admin/queue', async (req, res) => {
@@ -274,6 +299,19 @@ export function registerAdminRoutes(server, ctx) {
     const session = ctx.sessionRepo.findById(paymentId);
     if (!session) {
       HttpServer.json(res, 404, { error: `Payment session not found: ${paymentId}` });
+      return;
+    }
+
+    // A UPI payment is proven by the bank observation, never by a human click,
+    // and a finished payment cannot be re-confirmed.
+    const isCounter = session.method === PaymentMethod.CASH_COUNTER || session.method === PaymentMethod.CARD_COUNTER;
+    const terminal = [PaymentStatus.SUCCESS, PaymentStatus.FAILED, PaymentStatus.EXPIRED, PaymentStatus.CANCELLED].includes(session.status);
+    if (!isCounter || terminal) {
+      HttpServer.json(res, 409, {
+        error: !isCounter
+          ? 'Only cash/card counter payments can be confirmed manually. UPI payments are confirmed by the bank observer.'
+          : `Payment is already ${session.status}.`
+      });
       return;
     }
 
@@ -645,7 +683,7 @@ export function registerAdminRoutes(server, ctx) {
       upiId: account ? account.upiId : '',
       payeeName: account ? account.payeeName : merchant.businessName,
       webhookUrl: merchant.webhookUrl || '',
-      webhookSecret: merchant.webhookSecret || '',
+      hasWebhookSecret: Boolean(merchant.webhookSecret),
       supportEmails,
       supportMobiles,
       privacyPolicyUrl,
@@ -701,6 +739,13 @@ export function registerAdminRoutes(server, ctx) {
       updates.businessName = body.businessName.trim();
     }
     if (body.webhookUrl !== undefined) {
+      if (body.webhookUrl?.trim()) {
+        const check = validateWebhookUrl(body.webhookUrl, { production: ctx.security?.config.production });
+        if (!check.ok) {
+          HttpServer.json(res, 400, { error: `Invalid webhook URL: ${check.reason}` });
+          return;
+        }
+      }
       updates.webhookUrl = body.webhookUrl?.trim() || null;
     }
     if (body.webhookSecret !== undefined && body.webhookSecret.trim()) {
@@ -784,7 +829,7 @@ export function registerAdminRoutes(server, ctx) {
       upiId: account ? account.upiId : '',
       payeeName: account ? account.payeeName : updated.businessName,
       webhookUrl: updated.webhookUrl || '',
-      webhookSecret: updated.webhookSecret || '',
+      hasWebhookSecret: Boolean(updated.webhookSecret),
       supportEmails: updated.branding?.supportEmails || [],
       supportMobiles: updated.branding?.supportMobiles || [],
       privacyPolicyUrl: updated.branding?.privacyPolicyUrl || '',
@@ -842,7 +887,7 @@ export function registerAdminRoutes(server, ctx) {
       contactEmail: merchant.contactEmail,
       contactPhone: merchant.contactPhone,
       webhookUrl: merchant.webhookUrl,
-      webhookSecret: merchant.webhookSecret,
+      hasWebhookSecret: Boolean(merchant.webhookSecret),
       supportEmails,
       supportMobiles,
       privacyPolicyUrl,
@@ -899,6 +944,16 @@ export function registerAdminRoutes(server, ctx) {
     const updates = {};
     if (body.businessName && body.businessName.trim()) updates.businessName = body.businessName.trim();
     else if (inputBranding.businessName && inputBranding.businessName.trim()) updates.businessName = inputBranding.businessName.trim();
+    {
+      const candidate = body.webhookUrl !== undefined ? body.webhookUrl : inputBranding.webhookUrl;
+      if (candidate !== undefined && candidate?.trim()) {
+        const check = validateWebhookUrl(candidate, { production: ctx.security?.config.production });
+        if (!check.ok) {
+          HttpServer.json(res, 400, { error: `Invalid webhook URL: ${check.reason}` });
+          return;
+        }
+      }
+    }
     if (body.webhookUrl !== undefined) updates.webhookUrl = body.webhookUrl?.trim() || null;
     else if (inputBranding.webhookUrl !== undefined) updates.webhookUrl = inputBranding.webhookUrl?.trim() || null;
     if (body.webhookSecret !== undefined && body.webhookSecret.trim()) updates.webhookSecret = body.webhookSecret.trim();
@@ -1021,7 +1076,7 @@ export function registerAdminRoutes(server, ctx) {
       merchantId: updated.id,
       businessName: updated.businessName,
       webhookUrl: updated.webhookUrl || '',
-      webhookSecret: updated.webhookSecret || '',
+      hasWebhookSecret: Boolean(updated.webhookSecret),
       supportEmails: updated.branding?.supportEmails || [],
       supportMobiles: updated.branding?.supportMobiles || [],
       privacyPolicyUrl: updated.branding?.privacyPolicyUrl || '',
@@ -1525,8 +1580,10 @@ export function registerAdminRoutes(server, ctx) {
     });
   });
 
-  // POST /api/v1/admin/gmail/credentials
-  server.post('/api/v1/admin/gmail/credentials', async (req, res) => {
+  // POST /api/v1/admin/gmail/credentials (owner session)
+  // POST /api/v1/pollers/gmail-config     (observer-signed; the Gmail observer
+  //                                        process saves its refresh token here)
+  const saveGmailCredentials = async (req, res) => {
     const body = await HttpServer.parseBody(req).catch(() => ({}));
     let merchant = resolveMerchant(req, body.merchantId);
     const merchantId = merchant ? merchant.id : (body.merchantId || '00000000-0000-0000-0000-000000000001');
@@ -1572,7 +1629,9 @@ export function registerAdminRoutes(server, ctx) {
       message: 'Gmail API credentials saved successfully.',
       status: updatedGmail.refreshToken || updatedGmail.apiKey ? 'CONFIGURED' : 'UNCONFIGURED'
     });
-  });
+  };
+  server.post('/api/v1/admin/gmail/credentials', saveGmailCredentials);
+  server.post('/api/v1/pollers/gmail-config', saveGmailCredentials);
 
   // POST /api/v1/admin/gmail/test
   server.post('/api/v1/admin/gmail/test', async (req, res) => {

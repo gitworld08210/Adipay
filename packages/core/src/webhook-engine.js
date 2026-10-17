@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { generateHmac, toRupeesString } from '@youpi/common';
+import { generateHmac, toRupeesString, validateWebhookUrl, assertSafeResolvedAddress } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome } from './state-machine.js';
 
 export class WebhookEngine {
@@ -13,6 +13,8 @@ export class WebhookEngine {
   constructor(options) {
     this.db = options.db;
     this.merchantRepo = options.merchantRepo;
+    // In production only public https endpoints may receive webhooks (SSRF guard).
+    this.production = Boolean(options.production);
     this.maxRetries = options.maxRetries || 5;
   }
 
@@ -26,6 +28,14 @@ export class WebhookEngine {
     const merchant = this.merchantRepo.findById(session.merchantId);
     if (!merchant || !merchant.webhookUrl) {
       return { delivered: false, deliveryId: '', error: 'No webhook URL configured for merchant.' };
+    }
+
+    const urlCheck = validateWebhookUrl(merchant.webhookUrl, { production: this.production });
+    const resolved = urlCheck.ok
+      ? await assertSafeResolvedAddress(merchant.webhookUrl, { production: this.production })
+      : urlCheck;
+    if (!resolved.ok) {
+      return { delivered: false, deliveryId: '', error: `Webhook URL refused: ${resolved.reason}` };
     }
 
     const publicOutcome = isTerminalStatus(event) ? toPublicOutcome(event) : event;
@@ -51,6 +61,9 @@ export class WebhookEngine {
       'Content-Type': 'application/json',
       'X-Gateway-Event': publicOutcome,
       'X-Gateway-Signature': `sha256=${signature}`,
+      // V2 also covers the timestamp, so a captured delivery cannot be replayed
+      // later. V1 stays for existing receivers.
+      'X-Gateway-Signature-V2': `sha256=${generateHmac(`${timestamp}.${payloadString}`, merchant.webhookSecret)}`,
       'X-Gateway-Delivery-Id': deliveryId,
       'X-Gateway-Timestamp': timestamp
     };
@@ -126,6 +139,8 @@ export class WebhookEngine {
       const merchant = this.merchantRepo.findById(item.merchant_id);
       if (!merchant || !item.endpoint_url) continue;
 
+      if (!validateWebhookUrl(item.endpoint_url, { production: this.production }).ok ||
+          !(await assertSafeResolvedAddress(item.endpoint_url, { production: this.production })).ok) continue;
       const signature = generateHmac(item.payload, merchant.webhookSecret);
       const timestamp = Date.now().toString();
 
@@ -140,6 +155,7 @@ export class WebhookEngine {
             'Content-Type': 'application/json',
             'X-Gateway-Event': item.event_type,
             'X-Gateway-Signature': `sha256=${signature}`,
+            'X-Gateway-Signature-V2': `sha256=${generateHmac(`${timestamp}.${item.payload}`, merchant.webhookSecret)}`,
             'X-Gateway-Delivery-Id': item.id,
             'X-Gateway-Timestamp': timestamp
           },

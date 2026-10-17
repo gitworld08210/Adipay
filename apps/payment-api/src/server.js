@@ -7,7 +7,20 @@ import { URL } from 'node:url';
 export class HttpServer {
   constructor() {
     this.routes = [];
+    this.middlewares = [];
     this.sseClients = new Map(); // sessionId -> Set of res objects
+  }
+
+  /**
+   * Registers a middleware that runs before route matching. It receives
+   * (req, res, info) and must return true when it has already sent a response
+   * (the request is then not routed any further).
+   * `info.readRawBody()` buffers the body once so a later handler can still
+   * call HttpServer.parseBody(req).
+   * @param {(req: any, res: any, info: { pathname: string, search: string, readRawBody: () => Promise<string> }) => Promise<boolean>|boolean} fn
+   */
+  use(fn) {
+    this.middlewares.push(fn);
   }
 
   /**
@@ -125,6 +138,15 @@ export class HttpServer {
    * Parses JSON body from request.
    */
   static async parseBody(req) {
+    if (typeof req.rawBody === 'string') {
+      const text = req.rawBody;
+      if (!text.trim()) return {};
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error('Malformed JSON body');
+      }
+    }
     return new Promise((resolve, reject) => {
       let body = '';
       req.on('data', chunk => {
@@ -167,6 +189,36 @@ export class HttpServer {
       const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       const pathname = parsedUrl.pathname;
       const method = req.method.toUpperCase();
+
+      const readRawBody = () => new Promise((resolve, reject) => {
+        if (typeof req.rawBody === 'string') {
+          resolve(req.rawBody);
+          return;
+        }
+        let data = '';
+        req.on('data', chunk => {
+          data += chunk;
+          if (data.length > 2 * 1024 * 1024) {
+            reject(new Error('Payload Too Large'));
+            req.destroy();
+          }
+        });
+        req.on('end', () => {
+          req.rawBody = data;
+          resolve(data);
+        });
+        req.on('error', reject);
+      });
+
+      for (const mw of this.middlewares) {
+        try {
+          if (await mw(req, res, { pathname, search: parsedUrl.search, readRawBody })) return;
+        } catch (err) {
+          console.error(`Middleware Error [${method} ${pathname}]:`, err);
+          if (!res.headersSent) HttpServer.json(res, 500, { error: 'Internal Server Error' });
+          return;
+        }
+      }
 
       for (const route of this.routes) {
         if (route.method === method) {

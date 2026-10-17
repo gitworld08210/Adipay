@@ -1,6 +1,7 @@
 import { HttpServer } from '../server.js';
 import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome } from '@youpi/core';
+import { safeEqual } from '../security/crypto.js';
 
 /**
  * Registers merchant-facing payment routes.
@@ -26,8 +27,28 @@ export function registerPaymentRoutes(server, ctx) {
     return ctx.checkoutBaseUrl || 'http://localhost:7000';
   }
 
+  // Creating an order fixes the AMOUNT, so in production only the merchant's
+  // server (holding a secret API key) may do it. A browser must never be able
+  // to choose its own price. `PAYMENT_API_KEYS` is a comma-separated list so a
+  // key can be rotated without downtime.
+  function createAuthorized(req) {
+    const sec = ctx.security;
+    if (!sec || sec.insecureTest) return true;
+    if (!sec.config.production && !sec.env.REQUIRE_PAYMENT_API_KEY) return true;
+    if (sec.env.ALLOW_PUBLIC_PAYMENT_CREATE === '1') return true;
+    const keys = String(sec.env.PAYMENT_API_KEYS || '').split(',').map(k => k.trim()).filter(Boolean);
+    const auth = String(req.headers.authorization || '');
+    if (!auth.startsWith('Bearer ')) return false;
+    const presented = auth.slice(7).trim();
+    return keys.some(k => safeEqual(k, presented));
+  }
+
   // POST /api/v1/payments
   server.post('/api/v1/payments', async (req, res) => {
+    if (!createAuthorized(req)) {
+      HttpServer.json(res, 401, { error: 'A valid API key is required to create payments (Authorization: Bearer <key>).' });
+      return;
+    }
     const body = await HttpServer.parseBody(req);
     const idempotencyKey = req.headers['idempotency-key'] || body.idempotencyKey;
 

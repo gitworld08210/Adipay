@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 
 const testFiles = [
   'packages/common/src/__tests__/common.test.js',
+  'packages/common/src/__tests__/webhook-url.test.js',
   'packages/db/src/__tests__/customer-reset.test.js',
   'packages/db/src/__tests__/auth-matrix.test.js',
   'packages/db/src/__tests__/db.test.js',
@@ -9,6 +10,7 @@ const testFiles = [
   'packages/core/src/__tests__/queue-timing.test.js',
   'packages/core/src/__tests__/webhook-engine.test.js',
   'packages/merchant-sdk/src/__tests__/merchant-sdk.test.js',
+  'packages/merchant-sdk/src/__tests__/webhook-v2.test.js',
   'packages/merchant-sdk/src/__tests__/youpi-universal-integration.test.js',
   'apps/checkout-portal/src/__tests__/checkout-portal.test.js',
   'apps/coin-wallet-store/src/__tests__/coin-wallet-store.test.js',
@@ -30,9 +32,18 @@ const testFiles = [
   'apps/payment-api/src/__tests__/whatsapp-berry-auth.test.js',
   'apps/payment-api/src/__tests__/whitelabel-branding.test.js',
   'apps/payment-api/src/__tests__/cod-parallel-timer-decoupling.test.js',
+  'apps/payment-api/src/__tests__/security.test.js',
   'scripts/chaos-concurrency.test.js',
   'scripts/production-infrastructure.test.js'
 ];
+
+// Suites written before the security guard existed call admin/observer routes
+// without credentials. They run with the explicit test-only bypass. The bypass
+// needs NODE_ENV=test AND this flag, and is impossible in production. Suites
+// listed here run WITHOUT it, against the real guard.
+const GUARD_ENFORCED = new Set([
+  'apps/payment-api/src/__tests__/security.test.js'
+]);
 
 console.log('============================================================');
 console.log('🧪 YOUPI PG V2 — FULL REGRESSION TEST RUNNER');
@@ -51,7 +62,8 @@ for (let i = 0; i < testFiles.length; i++) {
     env: {
       ...process.env,
       YOUPI_MODE: 'localhost',
-      NODE_ENV: 'test'
+      NODE_ENV: 'test',
+      ...(GUARD_ENFORCED.has(file) ? {} : { YOUPI_INSECURE_TEST_MODE: '1' })
     },
     encoding: 'utf8'
   });
