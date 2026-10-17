@@ -11,3 +11,15 @@ services:
         value: 24.18.0
       - key: NODE_ENV
         value: production
+
+  - type: web
+    name: adipay-merchant-admin
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node apps/merchant-admin/src/index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 24.18.0
+      - key: NODE_ENV
+        value: production
