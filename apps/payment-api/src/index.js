@@ -462,7 +462,7 @@ export function createPaymentApp(customDb = null, options = {}) {
 }
 
 export function startServer(port = null, customDb = null) {
-  const finalPort = port || Number(process.env.PAYMENT_API_PORT || 6100);
+  const finalPort = port || Number(process.env.PORT || process.env.PAYMENT_API_PORT || 6100);
   const app = createPaymentApp(customDb);
 
   return new Promise(resolve => {
