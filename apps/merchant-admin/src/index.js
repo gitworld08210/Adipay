@@ -4,7 +4,7 @@ import { AdminServer } from './server.js';
 import { getDatabase, runMigrations, ensureDatabaseInitialized } from '@youpi/db';
 
 export function startAdminServer(port = null, options = {}) {
-  const finalPort = port || Number(process.env.MERCHANT_ADMIN_PORT || 6001);
+  const finalPort = port || Number(process.env.PORT || process.env.MERCHANT_ADMIN_PORT || 6001);
   const db = options.db || getDatabase();
   ensureDatabaseInitialized(db);
   runMigrations(db);
