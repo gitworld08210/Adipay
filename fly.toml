@@ -1,0 +1,45 @@
+# Adipay on Fly.io — one always-on Node machine with a PERSISTENT VOLUME, so the
+# SQLite database survives restarts/deploys on the free allowance (no paid disk
+# needed like on Render). The volume is mounted at /data and SQLITE_DB_PATH
+# points the gateway's database file there.
+#
+# App name and org are set at launch time:
+#   fly launch --no-deploy --name adipay --org aditya-246
+# (or edit `app` below). See setup/FLY_DEPLOY.md for the full steps.
+
+app = "adipay"
+primary_region = "sin"   # Singapore (closest to India). Change if you prefer.
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  # DB lives on the mounted volume so it persists across restarts/deploys.
+  SQLITE_DB_PATH = "/data/youpi_pg.sqlite"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"    # idle -> stop (saves the free allowance)
+  auto_start_machines = true     # a request wakes it again
+  min_machines_running = 0
+
+  [http_service.checks]
+    [http_service.checks.health]
+      method = "GET"
+      path = "/health"
+      interval = "30s"
+      timeout = "5s"
+      grace_period = "40s"   # first boot runs migrations + seeds; give it time
+
+# Persistent storage. `source` must match the volume you create:
+#   fly volumes create adipay_data --size 1 --region sin
+[mounts]
+  source = "adipay_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
