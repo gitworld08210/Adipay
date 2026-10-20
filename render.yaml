@@ -1,25 +1,51 @@
+# Adipay on Render - ONE service serves the payment API, checkout and the
+# owner-only admin dashboard (/admin), backed by one SQLite file on a disk.
+#
+# Secrets are declared with `sync: false`: Render asks you for them in the
+# dashboard and they are NEVER stored in this repository. Generate every value
+# with `npm run admin:setup` on your own machine.
+#
+# NOTE: a persistent disk requires a paid instance type. On the free plan the
+# filesystem is wiped on every deploy/restart, which would erase your merchant,
+# UPI account, customers and payment history.
 services:
   - type: web
-    name: adipay-payment-api
+    name: adipay
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm install && npm run build
     startCommand: npm run start
     healthCheckPath: /health
+    disk:
+      name: adipay-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: 24.18.0
       - key: NODE_ENV
         value: production
-
-  - type: web
-    name: adipay-merchant-admin
-    runtime: node
-    plan: free
-    buildCommand: npm install && npm run build
-    startCommand: node apps/merchant-admin/src/index.js
-    envVars:
-      - key: NODE_VERSION
-        value: 24.18.0
-      - key: NODE_ENV
-        value: production
+      - key: SQLITE_DB_PATH
+        value: /var/data/youpi_pg.sqlite
+      # --- Owner login (password + 2FA) -------------------------------------
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: ADMIN_TOTP_SECRET
+        sync: false
+      - key: ADMIN_SESSION_SECRET
+        sync: false
+      # --- Bank observers (Gmail / SMS / Android) -----------------------------
+      - key: OBSERVER_INGEST_SECRET
+        sync: false
+      # --- Your server (e.g. Oneleven backend) creates payments with this -------
+      - key: PAYMENT_API_KEYS
+        sync: false
+      # --- Optional: "Payments" button inside the Oneleven admin website --------
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ADMIN_SSO_USER_IDS
+        sync: false

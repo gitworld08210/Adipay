@@ -1,4 +1,5 @@
 import { generateHmac } from '@youpi/common';
+import { signedFetch } from './signed-fetch.js';
 
 export class PaymentObserverClient {
   /**
@@ -40,7 +41,7 @@ export class PaymentObserverClient {
       rawPayload: data.rawPayload || {}
     };
 
-    const res = await fetch(url, {
+    const res = await signedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

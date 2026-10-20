@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { signedFetch } from '@youpi/observer-sdk';
 import { GmailPoller } from './gmail-poller.js';
 import { GmailBrowserAutomator } from './browser-automator.js';
 
@@ -57,7 +58,7 @@ export class GmailObserverServer {
         let clientId = '';
         const apiBase = (this.poller.apiBaseUrl && !this.poller.apiBaseUrl.includes('gauravtesting.online')) ? this.poller.apiBaseUrl : `http://127.0.0.1:${process.env.PAYMENT_API_PORT || 6100}`;
         try {
-          const credRes = await fetch(`${apiBase}/api/v1/admin/gmail/credentials`);
+          const credRes = await signedFetch(`${apiBase}/api/v1/pollers/gmail-config`);
           if (credRes.ok) {
             const credData = await credRes.json();
             clientId = credData.clientId || credData.gmailConfig?.clientId || '';
@@ -105,7 +106,7 @@ export class GmailObserverServer {
           const apiBase = (this.poller.apiBaseUrl && !this.poller.apiBaseUrl.includes('gauravtesting.online')) ? this.poller.apiBaseUrl : `http://127.0.0.1:${process.env.PAYMENT_API_PORT || 6100}`;
 
           try {
-            const credRes = await fetch(`${apiBase}/api/v1/admin/gmail/credentials`);
+            const credRes = await signedFetch(`${apiBase}/api/v1/pollers/gmail-config`);
             if (credRes.ok) {
               const credData = await credRes.json();
               clientId = credData.clientId || credData.gmailConfig?.clientId || '';
@@ -181,7 +182,7 @@ export class GmailObserverServer {
           const nowIso = new Date().toISOString();
           // Persist credentials to Payment API
           try {
-            await fetch(`${apiBase}/api/v1/admin/gmail/credentials`, {
+            await signedFetch(`${apiBase}/api/v1/pollers/gmail-config`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

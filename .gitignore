@@ -48,3 +48,7 @@ Thumbs.db
 !packages/**
 !docs/**
 !assets/**
+
+# TypeScript build output (created by `npm run build`)
+packages/common/dist/
+*.tsbuildinfo

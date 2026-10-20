@@ -5,10 +5,14 @@ export class YoupiPaymentClient {
    * @param {{
    *   apiUrl?: string,
    *   merchantId?: string,
+   *   apiKey?: string,
    *   webhookSecret?: string
    * }} options
    */
   constructor(options = {}) {
+    // Server-side secret key (PAYMENT_API_KEYS on the gateway). Never put this
+    // in browser code.
+    this.apiKey = options.apiKey || null;
     this.apiUrl = (options.apiUrl || process.env.BASE_PAYMENT_API_URL || 'http://localhost:6100').replace(/\/+$/, '');
     this.merchantId = options.merchantId || null;
     this.webhookSecret = options.webhookSecret || null;
@@ -43,6 +47,9 @@ export class YoupiPaymentClient {
 
     if (this.merchantId) {
       headers['X-Merchant-Id'] = this.merchantId;
+    }
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
     if (params.idempotencyKey) {
       headers['Idempotency-Key'] = params.idempotencyKey;
@@ -109,8 +116,23 @@ export class YoupiPaymentClient {
    * @param {string} [customSecret] Optional override secret
    * @returns {any} Validated parsed webhook event payload
    */
-  verifyWebhook(rawPayloadString, signatureHeader, customSecret = null) {
+  verifyWebhook(rawPayloadString, signatureHeader, customSecret = null, options = {}) {
     const secret = customSecret || this.webhookSecret;
+    // Prefer the timestamp-bound V2 signature: pass `{ timestamp, signatureV2 }`
+    // (headers X-Gateway-Timestamp / X-Gateway-Signature-V2) to also reject
+    // deliveries older than `maxAgeMs` (default 5 minutes).
+    if (options.signatureV2 && options.timestamp) {
+      if (!secret) throw new Error('Webhook verification failed: webhookSecret is not configured.');
+      const age = Math.abs(Date.now() - Number(options.timestamp));
+      if (!Number.isFinite(age) || age > (options.maxAgeMs ?? 5 * 60 * 1000)) {
+        throw new Error('Webhook verification failed: timestamp outside the allowed window (possible replay).');
+      }
+      const given = String(options.signatureV2).replace('sha256=', '');
+      if (!verifyHmac(`${options.timestamp}.${rawPayloadString}`, secret, given)) {
+        throw new Error('Webhook verification failed: signature mismatch.');
+      }
+      return JSON.parse(rawPayloadString);
+    }
     if (!secret) {
       throw new Error('Webhook verification failed: webhookSecret is not configured.');
     }

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { HttpServer } from '../server.js';
 import { ObservationNormalizer, BankSmsParser, BankEmailParser, generateQrSvg } from '@youpi/core';
 import { toRupeesString, toPaise, verifyHmac, resolveRuntimeUrls } from '@youpi/common';
+import { safeEqual } from '../security/crypto.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,35 @@ const __dirname = path.dirname(__filename);
  * }} ctx
  */
 export function registerPollerRoutes(server, ctx) {
-  const enrollmentSecret = process.env.ANDROID_ENROLLMENT_SECRET || 'android_pairing_enrollment_secret_key_32_chars';
+  const sec = ctx.security;
+  const insecureTest = Boolean(sec?.insecureTest);
+  // Legacy shared secret: honoured ONLY by the unit-test bypass. In every real
+  // run a phone can only be paired with a one-time token the signed-in owner
+  // minted from the admin panel (10 minute lifetime, single use).
+  const legacyEnrollmentSecret = insecureTest
+    ? (process.env.ANDROID_ENROLLMENT_SECRET || 'android_pairing_enrollment_secret_key_32_chars')
+    : null;
+  const pairTokens = new Map(); // token -> expiry (ms)
+
+  function mintPairToken() {
+    const token = `pair_${crypto.randomBytes(24).toString('hex')}`;
+    const now = Date.now();
+    for (const [t, exp] of pairTokens) if (exp <= now) pairTokens.delete(t);
+    pairTokens.set(token, now + 10 * 60 * 1000);
+    return token;
+  }
+
+  function consumePairToken(token) {
+    if (typeof token !== 'string' || !token) return false;
+    let matched = null;
+    for (const candidate of pairTokens.keys()) {
+      if (safeEqual(candidate, token)) matched = candidate; // no early exit: constant work
+    }
+    if (!matched) return false;
+    const expiresAt = pairTokens.get(matched);
+    pairTokens.delete(matched); // single use, even if it had expired
+    return expiresAt > Date.now();
+  }
 
   // GET /api/v1/pollers/active-window (Enables deep intelligent DOM scanning for active amounts and dual-layer verification)
   server.get('/api/v1/pollers/active-window', async (req, res) => {
@@ -50,6 +79,25 @@ export function registerPollerRoutes(server, ctx) {
     HttpServer.json(res, 200, {
       hasActivePayment: sessions.length > 0,
       sessions
+    });
+  });
+
+  // GET /api/v1/pollers/gmail-config - the Gmail observer process reads its OAuth
+  // credentials here. Observer-signed, so only a holder of OBSERVER_INGEST_SECRET
+  // can read it (the owner-only admin endpoint is not reachable by the observer).
+  server.get('/api/v1/pollers/gmail-config', async (req, res) => {
+    const merchant = ctx.merchantRepo?.getDefault
+      ? ctx.merchantRepo.getDefault()
+      : (ctx.merchantRepo?.findById('00000000-0000-0000-0000-000000000001') || ctx.merchantRepo?.findAll()[0]);
+    const cfg = merchant?.branding?.gmailConfig || {};
+    HttpServer.json(res, 200, {
+      gmailConfig: {
+        clientId: cfg.clientId || '',
+        clientSecret: cfg.clientSecret || '',
+        refreshToken: cfg.refreshToken || '',
+        apiKey: cfg.apiKey || '',
+        connectedEmail: cfg.connectedEmail || null
+      }
     });
   });
 
@@ -150,8 +198,12 @@ export function registerPollerRoutes(server, ctx) {
     const deviceName = body.deviceName || 'Android SMS Gateway';
     const deviceModel = body.deviceModel || 'Android Device';
 
-    // Verify enrollment token against system secret or merchant token
-    if (!token || (token !== enrollmentSecret && token !== `pair_${merchantId.slice(0, 8)}` && token !== 'youpi_sms_pair_token_secure')) {
+    // Verify the one-time enrollment token minted by the signed-in owner.
+    const legacyOk = Boolean(legacyEnrollmentSecret) && (
+      token === legacyEnrollmentSecret || token === 'youpi_sms_pair_token_secure' ||
+      token === `pair_${String(merchantId).slice(0, 8)}`
+    );
+    if (!token || !(legacyOk || consumePairToken(token))) {
       HttpServer.json(res, 401, { error: 'Invalid or expired device pairing enrollment token.' });
       return;
     }
@@ -234,6 +286,11 @@ export function registerPollerRoutes(server, ctx) {
     // Verify HMAC Signature & Replay Drift Protection if headers are present
     const timestampStr = req.headers['x-timestamp'];
     const signature = req.headers['x-signature'];
+
+    if (!insecureTest && !(timestampStr && signature && device.signing_key_hash)) {
+      HttpServer.json(res, 401, { error: 'Signed request required (X-Timestamp and X-Signature).' });
+      return;
+    }
 
     if (timestampStr && signature && device.signing_key_hash) {
       const ts = Number(timestampStr);
@@ -397,7 +454,7 @@ export function registerPollerRoutes(server, ctx) {
     // Canonical runtime URL derivation (Part C2)
     const runtime = resolveRuntimeUrls(merchant?.branding || {});
     const baseUrl = runtime.apiUrl;
-    const token = enrollmentSecret;
+    const token = mintPairToken();
     const sessionId = crypto.randomUUID();
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
 

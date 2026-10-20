@@ -1,4 +1,4 @@
-import { PaymentObserverClient } from '@youpi/observer-sdk';
+import { PaymentObserverClient, signedFetch } from '@youpi/observer-sdk';
 import { BankEmailParser } from './parser.js';
 
 function extractBodyFromGmailPayload(payload) {
@@ -68,7 +68,7 @@ export class GmailPoller {
 
   async fetchCredentialsFromPaymentApi() {
     try {
-      const res = await fetch(`${this.apiBaseUrl}/api/v1/admin/gmail/credentials`);
+      const res = await signedFetch(`${this.apiBaseUrl}/api/v1/pollers/gmail-config`);
       if (res.ok) {
         const data = await res.json();
         const conf = data.gmailConfig || data;
@@ -125,7 +125,7 @@ export class GmailPoller {
 
   async resolveActiveReceivingAccount() {
     try {
-      const res = await fetch(`${this.apiBaseUrl}/api/v1/pollers/active-window`, { signal: AbortSignal.timeout(1000) });
+      const res = await signedFetch(`${this.apiBaseUrl}/api/v1/pollers/active-window`, { signal: AbortSignal.timeout(1000) });
       if (res.ok) {
         const data = await res.json();
         if (data.sessions && data.sessions.length > 0) {

@@ -46,6 +46,9 @@ import { registerPollerRoutes } from './routes/pollers.routes.js';
 import { registerAdminRoutes } from './routes/admin.routes.js';
 import { registerCustomerRoutes } from './routes/customer.routes.js';
 import { registerDeviceRoutes } from './routes/device.routes.js';
+import { registerAuthRoutes } from './routes/auth.routes.js';
+import { registerAdminUiRoutes } from './routes/admin-ui.routes.js';
+import { SecurityGuard, loadSecurityConfig } from './security/guard.js';
 import { getWhatsAppBerryService, WhatsAppBerryService } from './services/whatsapp-berry.service.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
@@ -108,10 +111,24 @@ export function createPaymentApp(customDb = null, options = {}) {
   const webhookEngine = new WebhookEngine({
     db,
     merchantRepo,
+    production: loadSecurityConfig(options.security?.env || process.env).production,
     maxRetries: Number(process.env.WEBHOOK_MAX_RETRIES || 5)
   });
 
   const server = new HttpServer();
+
+  // --- Security guard: owner auth, observer signatures, test-route lockdown ---
+  const securityEnv = options.security?.env || process.env;
+  const securityConfig = loadSecurityConfig(securityEnv);
+  const security = new SecurityGuard({ config: securityConfig, env: securityEnv });
+  security.fetchImpl = options.security?.fetchImpl || fetch;
+  server.use(async (req, res, info) => {
+    const verdict = await security.check(req, info.pathname, info.search, info.readRawBody);
+    if (verdict.ok) return false;
+    HttpServer.json(res, verdict.status, { error: verdict.error });
+    return true;
+  });
+
   let checkoutBaseUrl = process.env.BASE_CHECKOUT_URL || 'http://localhost:7000';
   try {
     const rootEnv = path.resolve(__dirname, '../../../.env');
@@ -430,9 +447,12 @@ export function createPaymentApp(customDb = null, options = {}) {
     defaultMerchant,
     checkoutBaseUrl,
     whatsappBerryService,
-    webhookEngine
+    webhookEngine,
+    security
   };
 
+  registerAuthRoutes(server, context);
+  registerAdminUiRoutes(server, context);
   registerPaymentRoutes(server, context);
   registerCheckoutRoutes(server, context);
   registerPollerRoutes(server, context);
@@ -461,9 +481,22 @@ export function createPaymentApp(customDb = null, options = {}) {
   };
 }
 
-export function startServer(port = null, customDb = null) {
+export function startServer(port = null, customDb = null, options = {}) {
   const finalPort = port || Number(process.env.PORT || process.env.PAYMENT_API_PORT || 6100);
-  const app = createPaymentApp(customDb);
+  const app = createPaymentApp(customDb, options);
+
+  // Fail closed: a production gateway must never start with missing/default secrets.
+  const cfg = app.context.security.config;
+  if (cfg.production && !cfg.ok) {
+    console.error('\n================================================================');
+    console.error('SECURITY CONFIGURATION ERROR - refusing to start in production');
+    console.error('================================================================');
+    for (const problem of cfg.problems) console.error(` - ${problem}`);
+    console.error('Run `npm run admin:setup` and put the printed values in your environment.');
+    console.error('================================================================\n');
+    app.destroy();
+    process.exit(1);
+  }
 
   return new Promise(resolve => {
     const instance = app.rawServer.listen(finalPort, () => {
