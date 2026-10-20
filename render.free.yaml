@@ -1,0 +1,52 @@
+# Adipay on Render — FREE plan (test only).
+#
+# WARNING: the free plan has NO persistent disk, so the SQLite database lives on
+# the ephemeral filesystem and is WIPED on every deploy/restart/sleep-wake. That
+# means merchants, UPI accounts, customers and payment history DO NOT survive.
+# Use this ONLY to test login / SSO / the admin UI — NOT for real payments.
+# For real payments, use the paid blueprint `render.yaml` (adds a 1GB disk).
+#
+# Free web services also sleep after ~15 min idle (first request then takes
+# ~50s to wake). A pinger (e.g. UptimeRobot hitting /health) keeps it awake but
+# CANNOT save the data — only a paid disk does.
+#
+# To use this file: Render → New → Blueprint → pick this repo; when it asks
+# which blueprint, this is `render.free.yaml`. Or rename it to render.yaml.
+services:
+  - type: web
+    name: adipay
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.18.0
+      - key: NODE_ENV
+        value: production
+      # Ephemeral path (no disk on free). Data is lost on restart — test only.
+      - key: SQLITE_DB_PATH
+        value: /tmp/adipay/youpi_pg.sqlite
+      # --- Owner login (password + 2FA) — from `npm run admin:setup` ----------
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: ADMIN_TOTP_SECRET
+        sync: false
+      - key: ADMIN_SESSION_SECRET
+        sync: false
+      # --- Bank observers ----------------------------------------------------
+      - key: OBSERVER_INGEST_SECRET
+        sync: false
+      # --- Server-to-server API key(s) ---------------------------------------
+      - key: PAYMENT_API_KEYS
+        sync: false
+      # --- SSO: "Payments" button from the Oneleven admin website ------------
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ADMIN_SSO_USER_IDS
+        sync: false
