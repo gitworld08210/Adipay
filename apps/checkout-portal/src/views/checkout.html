@@ -519,20 +519,21 @@
       background: #f8fafc;
       border: 1px solid var(--ypg-border-light);
       border-radius: 16px;
-      padding: 16px;
+      padding: 20px 16px;
       display: flex;
-      gap: 16px;
+      flex-direction: column;
+      gap: 14px;
       align-items: center;
       margin-bottom: 18px;
     }
 
     .ypg-qr-image-box {
-      width: 130px;
-      height: 130px;
+      width: 240px;
+      height: 240px;
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 12px;
-      padding: 6px;
+      padding: 10px;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
       display: flex;
       align-items: center;
@@ -550,12 +551,12 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      flex: 1;
-      overflow: hidden;
+      align-items: center;
+      text-align: center;
     }
 
     .ypg-qr-prompt-title {
-      font-size: 14px;
+      font-size: 15.5px;
       font-weight: 600;
       color: var(--ypg-text-dark);
       line-height: 1.3;
@@ -3024,8 +3025,8 @@
       border: 1px solid #fed7d7;
       border-left: 4px solid #e53e3e;
       border-radius: 8px;
-      padding: 10px 14px;
-      margin: 10px 0;
+      padding: 8px 12px;
+      margin: 8px 0;
       display: flex;
       gap: 10px;
       align-items: flex-start;
@@ -3560,52 +3561,13 @@
                   <div class="ypg-qr-details-col">
                     <div class="ypg-qr-prompt-title">Scan the QR using any UPI App</div>
 
-                    <!-- Brand Logos Row (Zero Fake Offers) -->
-                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:3px 0 6px 0;">
-                      <div class="ypg-upi-logos-row">
-                        <div class="ypg-app-icon" title="Google Pay"><img src="/icons/gpay.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.gpay" alt="GPay" /></div>
-                        <div class="ypg-app-icon" title="PhonePe"><img src="/icons/phonepe.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.phonepe" alt="PhonePe" />
-                        </div>
-                        <div class="ypg-app-icon" title="Paytm"><img src="/icons/paytm.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.paytm" alt="Paytm" /></div>
-                        <div class="ypg-app-icon" title="CRED"><img src="/icons/cred.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.cred" alt="CRED" /></div>
-                        <div class="ypg-app-icon" title="BHIM UPI"><img src="/icons/bhim.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.bhim" alt="BHIM" /></div>
-                        <div class="ypg-app-icon" title="Amazon Pay"><img src="/icons/amazonpay.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.amazonpay"
-                            alt="Amazon Pay" /></div>
-                      </div>
-                    </div>
-
-                    <div style="font-size:12px; color:#64748b; line-height:1.4;">
-                      Open any UPI app on your phone to scan and pay directly.
-                    </div>
                   </div>
                 </div>
                 <!-- UPI App Intent (mobile): one tap opens the payer's UPI app prefilled -->
                 <a id="upiIntentBtn" href="{{UPI_URI}}" class="ypg-intent-btn">
                   <span class="ypg-intent-btn-title">Pay ₹{{AMOUNT}} using UPI App</span>
-                  <span class="ypg-intent-btn-sub">Tap — GPay / PhonePe / Paytm opens instantly. No QR scan needed.</span>
                 </a>
 
-                <!-- UPI Payment Instructions Guide -->
-                <div class="ypg-instructions-card">
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">1</div>
-                    <div>Open any UPI App on your phone (Google Pay, PhonePe, Paytm, CRED).</div>
-                  </div>
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">2</div>
-                    <div>Scan the QR code above and complete the payment of <strong>₹{{AMOUNT}}</strong>.</div>
-                  </div>
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">3</div>
-                    <div>Payment is detected automatically, or tap <strong>Continue</strong> below after paying.</div>
-                  </div>
-                </div>
               </div>
 
               <!-- VIEW COD: CASH ON DELIVERY (ONLINE SELLING MODE) -->
@@ -3949,7 +3911,7 @@
 
         <!-- Legal Disclaimer -->
         <div class="ypg-legal-disclaimer" id="footerLegalDisclaimer">
-          Secured by YouPI PG & 256-Bit Bank Encryption &bull; <span style="text-decoration:underline; cursor:pointer;"
+          Secured by YouPI PG &bull; <span style="text-decoration:underline; cursor:pointer;"
             onclick="openHelpModal()">Privacy Notice</span>
         </div>
 
@@ -5890,9 +5852,9 @@
       const legalDisclaimerEl = document.getElementById('footerLegalDisclaimer');
       if (legalDisclaimerEl) {
         if (b.hidePoweredBy) {
-          legalDisclaimerEl.innerHTML = `Secured by 256-Bit Bank Encryption &bull; <span style="text-decoration:underline; cursor:pointer;" onclick="openHelpModal()">Privacy &amp; Terms</span>`;
+          legalDisclaimerEl.innerHTML = `Secure payments &bull; <span style="text-decoration:underline; cursor:pointer;" onclick="openHelpModal()">Privacy &amp; Terms</span>`;
         } else {
-          legalDisclaimerEl.innerHTML = `Secured by ${appName} &amp; 256-Bit Bank Encryption &bull; <span style="text-decoration:underline; cursor:pointer;" onclick="openHelpModal()">Privacy Notice</span>`;
+          legalDisclaimerEl.innerHTML = `Secured by ${appName} &bull; <span style="text-decoration:underline; cursor:pointer;" onclick="openHelpModal()">Privacy Notice</span>`;
         }
       }
 
