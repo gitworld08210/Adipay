@@ -111,11 +111,18 @@ export class CheckoutServer {
     html = html.replaceAll('{{AMOUNT}}', state?.amount || '0.00');
     html = html.replaceAll('{{VPA}}', vpa);
     // One-tap UPI app intent (mobile): the same URI the QR encodes,
-    // attribute-escaped for the anchor href.
+    // delivered as an Android intent URL (scheme=upi + ACTION_VIEW) —
+    // the hand-off form payment gateways use on mobile web. A bare
+    // upi:// anchor makes several UPI apps loop through their
+    // gallery-QR notice + bank-select screens without completing.
     const upiUri = state?.upiUri ||
-      `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(merchantName)}&am=${encodeURIComponent(state?.amount || '0.00')}&tn=${encodeURIComponent(paymentId)}`;
-    const upiUriAttr = upiUri.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
-    html = html.replaceAll('{{UPI_URI}}', upiUriAttr);
+      `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(merchantName)}&am=${encodeURIComponent(state?.amount || '0.00')}&cu=INR&tn=${encodeURIComponent(paymentId)}`;
+    const intentUri = upiUri.startsWith('upi://')
+      ? 'intent://' + upiUri.slice('upi://'.length) +
+        '#Intent;scheme=upi;action=android.intent.action.VIEW;end'
+      : upiUri;
+    const intentAttr = intentUri.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+    html = html.replaceAll('{{UPI_URI}}', intentAttr);
     html = html.replaceAll('{{LOGO_URL}}', logoUrl);
     html = html.replaceAll('{{SIDEBAR_NOTICE}}', sidebarNotice);
     html = html.replaceAll('{{COUNTER_INSTRUCTIONS}}', counterInstructions);
