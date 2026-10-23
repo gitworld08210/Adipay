@@ -582,3 +582,70 @@ describe('creating payments needs a server-side API key', () => {
     } finally { await t.close(); }
   });
 });
+
+describe('server-bound customers (merchant backend skips checkout OTP)', () => {
+  test('bind-customer with a valid merchant API key finds-or-creates the customer and activates the session; without the key it is refused', async () => {
+    const t = await boot(6217);
+    try {
+      const created = await t.request('/api/v1/payments', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${API_KEY}` },
+        body: { orderId: 'SERVER-BIND-1', amount: '25.00' }
+      });
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      assert.equal(created.body.status, 'INITIATED');
+      const paymentId = created.body.paymentId;
+
+      // No merchant key: the server-bind path must refuse (a browser cannot
+      // invent a verified customer identity for a checkout session).
+      const noKey = await t.request(`/api/v1/checkout/${paymentId}/bind-customer`, {
+        method: 'POST',
+        body: { customer: { email: 'app.user@example.com', name: 'App User' } }
+      });
+      assert.equal(noKey.status, 401);
+
+      const wrongKey = await t.request(`/api/v1/checkout/${paymentId}/bind-customer`, {
+        method: 'POST',
+        headers: { 'X-Merchant-Api-Key': 'not-the-key' },
+        body: { customer: { email: 'app.user@example.com', name: 'App User' } }
+      });
+      assert.equal(wrongKey.status, 401);
+
+      // Valid merchant key: customer is created on the fly, bound, and the
+      // session activates exactly like the post-OTP bind does.
+      const bound = await t.request(`/api/v1/checkout/${paymentId}/bind-customer`, {
+        method: 'POST',
+        headers: { 'X-Merchant-Api-Key': API_KEY },
+        body: { customer: { email: 'app.user@example.com', name: 'App User' } }
+      });
+      assert.equal(bound.status, 200, JSON.stringify(bound.body));
+      assert.equal(bound.body.success, true);
+      assert.equal(bound.body.customer.email, 'app.user@example.com');
+      assert.equal(bound.body.customer.name, 'App User');
+      assert.equal(bound.body.status, 'ACTIVE');
+
+      // Checkout state now carries the customer, so the hosted checkout
+      // skips its WhatsApp OTP login gate.
+      const state = await t.request(`/api/v1/checkout/${paymentId}/state`);
+      assert.equal(state.status, 200);
+      assert.equal(state.body.status, 'ACTIVE');
+      assert.equal(state.body.customer.email, 'app.user@example.com');
+      assert.ok(state.body.upiUri);
+
+      // A second top-up for the same email reuses the same customer record.
+      const created2 = await t.request('/api/v1/payments', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${API_KEY}` },
+        body: { orderId: 'SERVER-BIND-2', amount: '30.00' }
+      });
+      assert.equal(created2.status, 201, JSON.stringify(created2.body));
+      const bound2 = await t.request(`/api/v1/checkout/${created2.body.paymentId}/bind-customer`, {
+        method: 'POST',
+        headers: { 'X-Merchant-Api-Key': API_KEY },
+        body: { customer: { email: 'app.user@example.com', name: 'App User' } }
+      });
+      assert.equal(bound2.status, 200, JSON.stringify(bound2.body));
+      assert.equal(bound2.body.customer.id, bound.body.customer.id);
+    } finally { await t.close(); }
+  });
+});

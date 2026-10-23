@@ -78,6 +78,58 @@ export class CustomerRepository {
   }
 
   /**
+   * Finds a customer by email, creating a server-bound record when needed.
+   *
+   * This is only for merchant backends that have already authenticated the
+   * user in their own application (for example, a signed-in wallet top-up).
+   * It must never be exposed as a public signup path. The gateway schema
+   * requires a unique mobile number, while these applications may only have
+   * an email address. In that case a stable placeholder is derived from the
+   * email hash. It is never used for OTP delivery: the interactive checkout
+   * signup flow always collects and verifies a real number from the user.
+   *
+   * @param {{ name?: string, email: string }} data
+   * @returns {any}
+   */
+  findOrCreateServerCustomer(data) {
+    const email = normalizeEmail(data?.email);
+    if (!email || !isValidEmail(email)) {
+      throw new Error('A valid email address is required for a server-bound customer.');
+    }
+
+    const existing = this.findByEmail(email);
+    if (existing) return existing;
+
+    const name = String(data?.name || '').trim() || email.split('@')[0];
+    const digest = crypto.createHash('sha256').update(email).digest();
+    const base = Number(BigInt(`0x${digest.subarray(0, 8).toString('hex')}`) % 900000000n);
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const candidate = 100000000 + ((base + attempt) % 900000000);
+      const mobileNumber = `9${String(candidate).padStart(9, '0')}`;
+      if (this.findByMobile(mobileNumber)) continue;
+
+      try {
+        return this.create({
+          name,
+          email,
+          mobileNumber,
+          isPhoneVerified: false
+        });
+      } catch (err) {
+        // A concurrent server request may have created the same email or
+        // claimed the same derived placeholder first. Re-read before trying
+        // the next placeholder so concurrent top-ups converge on one record.
+        const raced = this.findByEmail(email);
+        if (raced) return raced;
+        if (attempt === 19) throw err;
+      }
+    }
+
+    throw new Error('Could not allocate a server-bound customer identity.');
+  }
+
+  /**
    * Finds customer by unique ID.
    * @param {string} id
    * @returns {any | null}

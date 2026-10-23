@@ -1,6 +1,7 @@
 import { HttpServer } from '../server.js';
 import { toRupeesString, buildUpiUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS } from '@youpi/common';
 import { validateSessionDeviceAccess } from '@youpi/core';
+import { safeEqual } from '../security/crypto.js';
 
 /**
  * Validates device access to an active payment session.
@@ -312,6 +313,21 @@ async function checkUpiServerHealth(ctx, enabledMethods = [], sellingMode = 'OFF
 }
 
 export function registerCheckoutRoutes(server, ctx) {
+  // A merchant backend may bind a customer it has already authenticated in
+  // its own application. This uses a dedicated header so it cannot be
+  // confused with a customer session token in the Authorization header.
+  function merchantServerAuthorized(req) {
+    const sec = ctx.security;
+    if (sec?.insecureTest) return true;
+    const presented = String(req.headers['x-merchant-api-key'] || '').trim();
+    if (!presented) return false;
+    const keys = String(sec?.env?.PAYMENT_API_KEYS || '')
+      .split(',')
+      .map(k => k.trim())
+      .filter(Boolean);
+    return keys.some(k => safeEqual(k, presented));
+  }
+
   // GET /api/v1/checkout/:id/state
   server.get('/api/v1/checkout/:id/state', async (req, res, params) => {
     const session = ctx.sessionRepo.findById(params.id);
@@ -621,7 +637,42 @@ export function registerCheckoutRoutes(server, ctx) {
     const { customerId } = body;
 
     let customer = null;
-    if (token && ctx.customerSessionRepo) {
+    let serverBoundCustomer = false;
+    // Server-bound flow for already-authenticated app users. The merchant
+    // backend presents its secret API key in X-Merchant-Api-Key and supplies
+    // the user's email/name; no WhatsApp OTP is involved. The rest of this
+    // handler still applies the immutable-binding, conflict, ban, queue and
+    // timer rules before the checkout is allowed to proceed.
+    const serverCustomerEmail = typeof body.customer?.email === 'string'
+      ? body.customer.email.trim()
+      : '';
+    if (!token && !customerId && serverCustomerEmail && ctx.customerRepo?.findOrCreateServerCustomer) {
+      if (!merchantServerAuthorized(req)) {
+        HttpServer.json(res, 401, { error: 'A valid merchant API key is required for server customer binding.' });
+        return;
+      }
+      try {
+        customer = ctx.customerRepo.findOrCreateServerCustomer({
+          email: serverCustomerEmail,
+          name: typeof body.customer?.name === 'string' ? body.customer.name : ''
+        });
+        serverBoundCustomer = Boolean(customer);
+      } catch (err) {
+        HttpServer.json(res, 400, { error: err.message });
+        return;
+      }
+      if (customer && ctx.customerRepo.isBanned(customer.id)) {
+        HttpServer.json(res, 403, {
+          status: 'BLOCKED',
+          error: 'ACCESS BLOCKED: Your account has been temporarily blocked because suspicious payment activity was detected. Our team will review the activity before access can be restored.',
+          message: 'Your account has been temporarily blocked because suspicious payment activity was detected. Our team will review the activity before access can be restored.',
+          isBanned: true
+        });
+        return;
+      }
+    }
+
+    if (!customer && token && ctx.customerSessionRepo) {
       const authContext = ctx.customerSessionRepo.findByToken(token);
       if (!authContext) {
         HttpServer.json(res, 401, { error: 'Invalid or expired customer session token.' });
@@ -763,10 +814,10 @@ export function registerCheckoutRoutes(server, ctx) {
         merchantId: session.merchantId,
         entityType: 'PAYMENT_SESSION',
         entityId: session.id,
-        action: 'CUSTOMER_AUTHENTICATED_AND_BOUND',
-        actorType: 'CUSTOMER',
+        action: serverBoundCustomer ? 'CUSTOMER_SERVER_BOUND' : 'CUSTOMER_AUTHENTICATED_AND_BOUND',
+        actorType: serverBoundCustomer ? 'MERCHANT_SERVER' : 'CUSTOMER',
         actorId: customer.id,
-        details: { email: customer.email, mobileNumber: customer.mobileNumber, sessionStatus: queueResult.status, hasActiveSessionConflict }
+        details: { email: customer.email, mobileNumber: customer.mobileNumber, sessionStatus: queueResult.status, hasActiveSessionConflict, serverBoundCustomer }
       });
     }
 
