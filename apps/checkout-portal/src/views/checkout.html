@@ -3081,13 +3081,64 @@
     .ypg-btn-downtime-alt:hover {
       opacity: 0.9;
     }
+
+    /* ================================================================
+       CLEAN CHECKOUT SKIN — Razorpay-style: one title, QR-first, quiet
+       chrome. Visual only; ids/classes used by the script are unchanged.
+       ================================================================ */
+    .ypg-amount, .ypg-bottom-price, .ypg-pc-price-val, #activeTimerText { font-variant-numeric: tabular-nums; }
+
+    .ypg-upi-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 14px; }
+    .ypg-upi-title { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.2px; color: var(--ypg-text-dark); }
+    .ypg-countdown-pill { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: 700; padding: 3px 10px; }
+
+    /* Health is communicated by the downtime alert alone (shown only when UPI is degraded). */
+    .ypg-server-health-indicator { display: none !important; }
+
+    .ypg-qr-card-container {
+      flex-direction: column; align-items: center; gap: 14px;
+      background: #ffffff; border: 1px solid var(--ypg-border); border-radius: 16px;
+      padding: 22px 18px 18px; margin-bottom: 0;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .ypg-qr-image-box {
+      width: 216px; height: 216px; padding: 10px;
+      border: 1px solid var(--ypg-border-light); border-radius: 14px; box-shadow: none;
+    }
+    .ypg-qr-loading {
+      width: 100%; height: 100%; border-radius: 8px; font-size: 0; color: transparent;
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%; animation: ypgQrShimmer 1.2s linear infinite;
+    }
+    @keyframes ypgQrShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    .ypg-qr-details-col { align-items: center; text-align: center; gap: 10px; flex: none; width: 100%; }
+    .ypg-qr-prompt-title { font-size: 13px; font-weight: 600; color: var(--ypg-text-muted); }
+    .ypg-qr-card-container .ypg-upi-logos-row { justify-content: center; flex-wrap: nowrap; gap: 10px; margin: 0; }
+    .ypg-qr-card-container .ypg-app-icon { width: 28px; height: 28px; border-radius: 8px; background: #fff; box-shadow: 0 0 0 1px var(--ypg-border-light); }
+    .ypg-qr-card-container .ypg-app-icon img { border-radius: 8px; }
+
+    .ypg-intent-btn {
+      flex-direction: row; justify-content: center; margin: 14px 0 0;
+      background: var(--ypg-blue); border-radius: 12px; padding: 15px 18px;
+      box-shadow: 0 6px 16px -6px var(--ypg-blue);
+    }
+    .ypg-intent-btn-title { font-size: 15px; font-weight: 700; }
+
+    .ypg-legal-disclaimer { font-size: 11px; color: #94a3b8; letter-spacing: 0.1px; }
+    .ypg-legal-disclaimer:empty { display: none; }
+    .ypg-toast:empty { display: none; }
+    .ypg-header-main-row { align-items: center; }
+    .ypg-pc-methods-list.is-single { display: none !important; }
+    @media (min-width: 768px) {
+      .ypg-pc-methods-list.is-single + .ypg-pc-active-view #viewUpiContent { max-width: 440px; margin: 0 auto; }
+    }
   </style>
 </head>
 
 <body>
 
   <!-- TOAST NOTIFICATION -->
-  <div id="ypgToast" class="ypg-toast"><img src="/icons/upi.svg" alt="UPI" style="height:12px; vertical-align:middle; filter:brightness(0) invert(1); margin-right:4px;" /> Direct UPI QR is active for instant banking verification</div>
+  <div id="ypgToast" class="ypg-toast" role="status" aria-live="polite"></div>
 
   <!-- YOUPI PG CHECKOUT CARD / DRAWER WRAPPER -->
   <div class="ypg-wrapper">
@@ -3133,25 +3184,25 @@
           </div>
           <div class="ypg-pc-brand-info">
             <div class="ypg-pc-merchant-name" id="pcMerchantName">{{MERCHANT_NAME}}</div>
-            <div class="ypg-pc-trust-badge" id="pcTrustBadge">
+            <div class="ypg-pc-trust-badge" id="pcTrustBadge" style="display:none;">
               <svg class="ypg-pc-green-shield" viewBox="0 0 24 24" fill="none">
                 <path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-4z" fill="#10b981" />
                 <path d="M8.5 12l2.5 2.5 5-5" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"
                   stroke-linejoin="round" />
               </svg>
-              <span id="pcTrustBadgeText">YouPI PG Trusted Business</span>
+              <span id="pcTrustBadgeText"></span>
             </div>
           </div>
         </div>
 
         <!-- Social Proof Banner -->
-        <div class="ypg-pc-social-proof" id="pcSocialProofWrap">
+        <div class="ypg-pc-social-proof" id="pcSocialProofWrap" style="display:none;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="9" cy="21" r="1" />
             <circle cx="20" cy="21" r="1" />
             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
           </svg>
-          <span id="pcSocialProofText">500+ orders last month from {{MERCHANT_NAME}}</span>
+          <span id="pcSocialProofText"></span>
         </div>
 
         <!-- Price Summary Card (STRICTLY NO UPI ID VISIBLE) -->
@@ -3173,30 +3224,7 @@
         </div>
       </div>
 
-      <!-- Bottom Isometric Shopping Bags Graphic -->
-      <div style="margin-top:auto;">
-        <div class="ypg-pc-bags-wrap">
-          <svg viewBox="0 0 260 160" width="220" height="135" fill="none">
-            <ellipse cx="130" cy="145" rx="100" ry="12" fill="rgba(0,0,0,0.18)" />
-            <!-- White / Cyan shopping bag with blue handles -->
-            <path d="M100 65 L135 60 L145 135 L90 140 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
-            <path d="M100 65 L135 60 L140 85 L95 90 Z" fill="#f1f5f9" />
-            <path d="M110 63 C110 48, 125 48, 125 61" stroke="#0284c7" stroke-width="3" fill="none"
-              stroke-linecap="round" />
-            <!-- Green shopping bag with % badge -->
-            <path d="M140 75 L180 70 L195 135 L135 140 Z" fill="#10b981" stroke="#059669" stroke-width="1.5" />
-            <path d="M150 73 C150 58, 168 58, 168 71" stroke="#047857" stroke-width="3" fill="none"
-              stroke-linecap="round" />
-            <circle cx="160" cy="98" r="14" fill="#34d399" />
-            <text x="160" y="103" font-size="12" font-weight="900" fill="#064e3b" text-anchor="middle">%</text>
-            <!-- Blue gift box with white ribbon -->
-            <path d="M55 100 L95 95 L105 140 L50 142 Z" fill="#0284c7" />
-            <path d="M50 100 L95 95 L95 105 L48 108 Z" fill="#38bdf8" />
-            <rect x="71" y="96" width="7" height="45" fill="#ffffff" />
-          </svg>
-        </div>
-      </div>
-    </aside>
+      </aside>
 
     <!-- PC RIGHT WORKSPACE WRAPPER -->
     <div class="ypg-pc-workspace">
@@ -3249,13 +3277,13 @@
             <!-- Merchant Name & YouPI PG Verified Business Badge -->
             <div class="ypg-merchant-text-group">
               <div class="ypg-merchant-name" id="headerMerchantName">{{MERCHANT_NAME}}</div>
-              <div class="ypg-trusted-badge" id="headerTrustBadge">
+              <div class="ypg-trusted-badge" id="headerTrustBadge" style="display:none;">
                 <svg class="ypg-green-shield" viewBox="0 0 24 24" fill="none">
                   <path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-4z" fill="#10b981" />
                   <path d="M8.5 12l2.5 2.5 5-5" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"
                     stroke-linejoin="round" />
                 </svg>
-                <span id="headerTrustBadgeText">YouPI PG Verified Business</span>
+                <span id="headerTrustBadgeText"></span>
               </div>
             </div>
           </div>
@@ -3272,14 +3300,14 @@
         </div>
 
         <!-- Header Sub-banner -->
-        <div class="ypg-header-subbanner" id="headerSubbanner">
+        <div class="ypg-header-subbanner" id="headerSubbanner" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
             stroke-linejoin="round">
             <circle cx="9" cy="21" r="1" />
             <circle cx="20" cy="21" r="1" />
             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
           </svg>
-          <span id="subbannerText">200+ orders verified this month by YouPI PG</span>
+          <span id="subbannerText"></span>
         </div>
 
         <!-- Account Popover Menu -->
@@ -3512,12 +3540,9 @@
             <div class="ypg-pc-active-view">
               <!-- VIEW A: PURE UPI QR INTERFACE -->
               <div id="viewUpiContent">
-                <h2 class="ypg-page-title">UPI QR Payment</h2>
-
-                <!-- Section Label & Countdown Timer -->
-                <div class="ypg-section-label-row">
-                  <span class="ypg-section-heading">Scan &amp; Pay via UPI</span>
-                  <div class="ypg-countdown-pill" id="activeTimerBadge">
+                <div class="ypg-upi-head">
+                  <h2 class="ypg-upi-title">Pay with UPI</h2>
+                  <div class="ypg-countdown-pill" id="activeTimerBadge" title="Time left">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                       stroke-width="2.2">
                       <circle cx="12" cy="12" r="10" />
@@ -3527,7 +3552,7 @@
                   </div>
                 </div>
 
-                <!-- UPI Server Health Indicator & Downtime Warning -->
+                <!-- UPI server health (state hook; the alert below is what users see) -->
                 <div class="ypg-server-health-indicator {{SERVER_HEALTH_CLASS}}" id="upiServerHealthIndicator">
                   <span class="ypg-pulse-dot" id="serverPulseDot"></span>
                   <span id="serverStatusLabel">{{SERVER_HEALTH_LABEL}}</span>
@@ -3551,61 +3576,30 @@
 
                 <!-- Core UPI QR Card -->
                 <div class="ypg-qr-card-container">
-                  <!-- Left: QR Box -->
                   <div class="ypg-qr-image-box" id="qrImageContainer">
-                    <div style="font-size:11px; color:#94a3b8; text-align:center;">Loading QR...</div>
+                    <div class="ypg-qr-loading">Loading QR</div>
                   </div>
-
-                  <!-- Right: Prompt, UPI App Logos -->
                   <div class="ypg-qr-details-col">
-                    <div class="ypg-qr-prompt-title">Scan the QR using any UPI App</div>
-
-                    <!-- Brand Logos Row (Zero Fake Offers) -->
-                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:3px 0 6px 0;">
-                      <div class="ypg-upi-logos-row">
-                        <div class="ypg-app-icon" title="Google Pay"><img src="/icons/gpay.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.gpay" alt="GPay" /></div>
-                        <div class="ypg-app-icon" title="PhonePe"><img src="/icons/phonepe.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.phonepe" alt="PhonePe" />
-                        </div>
-                        <div class="ypg-app-icon" title="Paytm"><img src="/icons/paytm.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.paytm" alt="Paytm" /></div>
-                        <div class="ypg-app-icon" title="CRED"><img src="/icons/cred.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.cred" alt="CRED" /></div>
-                        <div class="ypg-app-icon" title="BHIM UPI"><img src="/icons/bhim.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.bhim" alt="BHIM" /></div>
-                        <div class="ypg-app-icon" title="Amazon Pay"><img src="/icons/amazonpay.png"
-                            onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.amazonpay"
-                            alt="Amazon Pay" /></div>
-                      </div>
-                    </div>
-
-                    <div style="font-size:12px; color:#64748b; line-height:1.4;">
-                      Open any UPI app on your phone to scan and pay directly.
+                    <div class="ypg-qr-prompt-title">Scan with any UPI app</div>
+                    <div class="ypg-upi-logos-row">
+                      <div class="ypg-app-icon" title="Google Pay"><img src="/icons/gpay.png"
+                          onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.gpay" alt="GPay" /></div>
+                      <div class="ypg-app-icon" title="PhonePe"><img src="/icons/phonepe.png"
+                          onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.phonepe" alt="PhonePe" /></div>
+                      <div class="ypg-app-icon" title="Paytm"><img src="/icons/paytm.png"
+                          onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.paytm" alt="Paytm" /></div>
+                      <div class="ypg-app-icon" title="CRED"><img src="/icons/cred.png"
+                          onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.cred" alt="CRED" /></div>
+                      <div class="ypg-app-icon" title="BHIM UPI"><img src="/icons/bhim.png"
+                          onerror="if(window.FALLBACK_ICONS)this.src=window.FALLBACK_ICONS.bhim" alt="BHIM" /></div>
                     </div>
                   </div>
                 </div>
-                <!-- UPI App Intent (mobile): one tap opens the payer's UPI app prefilled -->
+
+                <!-- UPI App Intent (mobile only): opens the payer's UPI app prefilled -->
                 <a id="upiIntentBtn" href="{{UPI_URI}}" class="ypg-intent-btn">
-                  <span class="ypg-intent-btn-title">Pay ₹{{AMOUNT}} using UPI App</span>
-                  <span class="ypg-intent-btn-sub">Tap — GPay / PhonePe / Paytm opens instantly. No QR scan needed.</span>
+                  <span class="ypg-intent-btn-title">Pay ₹{{AMOUNT}} with UPI app</span>
                 </a>
-
-                <!-- UPI Payment Instructions Guide -->
-                <div class="ypg-instructions-card">
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">1</div>
-                    <div>Open any UPI App on your phone (Google Pay, PhonePe, Paytm, CRED).</div>
-                  </div>
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">2</div>
-                    <div>Scan the QR code above and complete the payment of <strong>₹{{AMOUNT}}</strong>.</div>
-                  </div>
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">3</div>
-                    <div>Payment is detected automatically, or tap <strong>Continue</strong> below after paying.</div>
-                  </div>
-                </div>
               </div>
 
               <!-- VIEW COD: CASH ON DELIVERY (ONLINE SELLING MODE) -->
@@ -3622,19 +3616,6 @@
                   </div>
                 </div>
 
-                <!-- COD Notice Pill -->
-                <div class="ypg-offers-pill" style="background:#fef3c7; border-color:#fde68a;">
-                  <div class="ypg-offers-left">
-                    <div class="ypg-offer-icon-badge" style="background:#d97706; color:#fff; display:flex; align-items:center; justify-content:center;">
-                      <img src="/icons/cash.svg" alt="Cash" style="width:14px; height:14px;" />
-                    </div>
-                    <span style="color:#92400e; font-weight:700;">Pay Cash at Doorstep</span>
-                  </div>
-                  <div class="ypg-offers-right">
-                    <span style="color:#b45309;">Verified Purchase</span>
-                  </div>
-                </div>
-
                 <!-- Order Summary Card -->
                 <div
                   style="background:#ffffff; border:1px solid var(--ypg-border); border-radius:12px; padding:16px; margin:14px 0;">
@@ -3646,23 +3627,6 @@
                     style="font-size:12px; color:#334155; line-height:1.5; border-top:1px dashed var(--ypg-border); padding-top:10px;">
                     <div>Recipient: <strong id="codCustomerName">Customer</strong></div>
                     <div>Contact: <span id="codCustomerPhone" style="font-family:monospace;">-</span></div>
-                  </div>
-                </div>
-
-                <!-- Doorstep Delivery Guide -->
-                <div class="ypg-instructions-card">
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">1</div>
-                    <div>Review and confirm your Cash on Delivery order below.</div>
-                  </div>
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">2</div>
-                    <div>Merchant processes and ships your package directly to your destination.</div>
-                  </div>
-                  <div class="ypg-instruction-step">
-                    <div class="ypg-step-num">3</div>
-                    <div>Hand over <strong>₹{{AMOUNT}}</strong> in physical cash to the courier agent upon arrival.
-                    </div>
                   </div>
                 </div>
 
@@ -3815,8 +3779,7 @@
                   <div class="ypg-success-title" id="successTitleText">Payment Successful!</div>
                   <div class="ypg-success-amount" id="successAmountVal">₹{{AMOUNT}}</div>
                   <div style="font-size:12px; color:var(--ypg-text-muted); margin-bottom:14px;" id="successDescText">
-                    Your payment was automatically verified by YouPI PG banking observers.
-                  </div>
+                    </div>
                   <div id="successCodDevApiBox"
                     style="display:none; font-size:11.5px; background:#f1f5f9; padding:10px 14px; border-radius:8px; margin-bottom:14px; text-align:left; border:1px solid #e2e8f0;">
                     <span style="font-weight:700; color:#334155;">Developer Order API:</span>
@@ -3948,10 +3911,7 @@
       <footer class="ypg-sticky-footer" id="ypgStickyFooter">
 
         <!-- Legal Disclaimer -->
-        <div class="ypg-legal-disclaimer" id="footerLegalDisclaimer">
-          Secured by YouPI PG & 256-Bit Bank Encryption &bull; <span style="text-decoration:underline; cursor:pointer;"
-            onclick="openHelpModal()">Privacy Notice</span>
-        </div>
+        <div class="ypg-legal-disclaimer" id="footerLegalDisclaimer"></div>
 
         <!-- Bottom Action Row: ₹5,500 View Details | Continue Button -->
         <div class="ypg-action-bottom-bar">
@@ -3986,10 +3946,7 @@
             <strong>{{MERCHANT_NAME}}</strong>
           </div>
 
-          <div class="ypg-details-row">
-            <span>Platform & Processing Fee</span>
-            <span style="color:#10b981; font-weight:700;">₹0.00 (Zero Fee)</span>
-          </div>
+          
           <div class="ypg-details-row total">
             <span>Total Amount</span>
             <strong id="drawerTotalAmount">₹{{AMOUNT}}</strong>
@@ -4003,7 +3960,7 @@
     <div class="ypg-dialog-overlay" id="helpModal" hidden>
       <div class="ypg-dialog-card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <strong style="font-size:15px;" id="helpModalTitle">YouPI PG Help &amp; Support</strong>
+          <strong style="font-size:15px;" id="helpModalTitle">Help &amp; support</strong>
           <button type="button" onclick="closeHelpModal()"
             style="background:none; border:none; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
         </div>
@@ -5155,6 +5112,10 @@
       if (bar) {
         bar.style.display = (!enabledMethods || enabledMethods.length <= 1) ? 'none' : 'flex';
       }
+      // Desktop: a single method needs no method list column.
+      if (pcMethodsList) {
+        pcMethodsList.classList.toggle('is-single', !enabledMethods || enabledMethods.length <= 1);
+      }
 
       const tabUpi = document.getElementById('tabMethodUpi');
       const tabCod = document.getElementById('tabMethodCod');
@@ -5663,10 +5624,10 @@
       if (trustBadgeEl) {
         if (b.hideTrustBadge) {
           trustBadgeEl.style.display = 'none';
-        } else {
+        } else if (b.trustBadgeText) {
           trustBadgeEl.style.display = 'inline-flex';
           if (trustBadgeTextEl) {
-            trustBadgeTextEl.textContent = b.trustBadgeText || `${appName} Verified Business`;
+            trustBadgeTextEl.textContent = b.trustBadgeText;
           }
         }
       }
@@ -5677,10 +5638,10 @@
       if (subbannerEl) {
         if (b.hideSubbanner) {
           subbannerEl.style.display = 'none';
-        } else {
+        } else if (b.subbannerText) {
           subbannerEl.style.display = 'flex';
           if (subbannerTextEl) {
-            subbannerTextEl.textContent = b.subbannerText || b.sidebarNotice || `Verified & Protected by ${appName}`;
+            subbannerTextEl.textContent = b.subbannerText;
           }
         }
       }
@@ -5722,10 +5683,10 @@
       if (pcTrust) {
         if (b.hideTrustBadge) {
           pcTrust.style.display = 'none';
-        } else {
+        } else if (b.trustBadgeText) {
           pcTrust.style.display = 'inline-flex';
           if (pcTrustText) {
-            pcTrustText.textContent = b.trustBadgeText || `${appName} Trusted Business`;
+            pcTrustText.textContent = b.trustBadgeText;
           }
         }
       }
@@ -5736,10 +5697,10 @@
       if (pcSocialWrap) {
         if (b.hideSubbanner) {
           pcSocialWrap.style.display = 'none';
-        } else {
+        } else if (b.subbannerText) {
           pcSocialWrap.style.display = 'flex';
           if (pcSocialProof) {
-            pcSocialProof.textContent = b.subbannerText || b.sidebarNotice || `500+ orders last month from ${data.merchantName || 'Merchant'}`;
+            pcSocialProof.textContent = b.subbannerText;
           }
         }
       }
@@ -5883,30 +5844,27 @@
         if (splashDefaultShield) splashDefaultShield.style.display = 'none';
       }
       if (splashSecuredText) {
-        splashSecuredText.textContent = b.hidePoweredBy ? (b.appName || '256-Bit Bank Encryption') : (b.appName || 'YouPI PG');
+        splashSecuredText.textContent = b.appName || 'YouPI PG';
+        const splashFooter = document.getElementById('splashFooterWrap');
+        if (splashFooter && b.hidePoweredBy) splashFooter.style.display = 'none';
       }
 
       // 12. Legal Disclaimer Strip
       const legalDisclaimerEl = document.getElementById('footerLegalDisclaimer');
       if (legalDisclaimerEl) {
-        if (b.hidePoweredBy) {
-          legalDisclaimerEl.innerHTML = `Secured by 256-Bit Bank Encryption &bull; <span style="text-decoration:underline; cursor:pointer;" onclick="openHelpModal()">Privacy &amp; Terms</span>`;
-        } else {
-          legalDisclaimerEl.innerHTML = `Secured by ${appName} &amp; 256-Bit Bank Encryption &bull; <span style="text-decoration:underline; cursor:pointer;" onclick="openHelpModal()">Privacy Notice</span>`;
-        }
+        legalDisclaimerEl.textContent = b.hidePoweredBy ? '' : `Secured by ${appName}`;
+        legalDisclaimerEl.style.display = b.hidePoweredBy ? 'none' : '';
       }
 
       // 13. Success Screen Description
       const successDesc = document.getElementById('successDescText');
       if (successDesc) {
-        successDesc.textContent = b.hidePoweredBy
-          ? 'Your payment was automatically verified by banking observers.'
-          : `Your payment was automatically verified by ${appName} banking observers.`;
+        successDesc.textContent = `Paid to ${merchantName}`;
       }
 
       // 14. Help Modal Title & Legal Links
       const helpTitle = document.getElementById('helpModalTitle');
-      if (helpTitle) helpTitle.textContent = `${appName} Help & Support`;
+      if (helpTitle) helpTitle.textContent = 'Help & support';
       renderHelpLegalLinks(b);
 
       // 1. Conflict detection: single active payment session invariant
@@ -6034,7 +5992,7 @@
             }
           } else {
             if (titleEl) titleEl.textContent = 'Payment Successful!';
-            if (descEl) descEl.textContent = 'Your payment was automatically verified by YouPI PG banking observers.';
+            if (descEl) descEl.textContent = `Paid to ${data.merchantName || 'merchant'}`;
             if (codApiBox) codApiBox.style.display = 'none';
           }
 
