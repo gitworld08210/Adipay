@@ -110,6 +110,12 @@ export class CheckoutServer {
     html = html.replaceAll('{{ORDER_ID}}', orderId);
     html = html.replaceAll('{{AMOUNT}}', state?.amount || '0.00');
     html = html.replaceAll('{{VPA}}', vpa);
+    // One-tap UPI app intent (mobile): the same URI the QR encodes,
+    // attribute-escaped for the anchor href.
+    const upiUri = state?.upiUri ||
+      `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(merchantName)}&am=${encodeURIComponent(state?.amount || '0.00')}&tn=${encodeURIComponent(paymentId)}`;
+    const upiUriAttr = upiUri.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+    html = html.replaceAll('{{UPI_URI}}', upiUriAttr);
     html = html.replaceAll('{{LOGO_URL}}', logoUrl);
     html = html.replaceAll('{{SIDEBAR_NOTICE}}', sidebarNotice);
     html = html.replaceAll('{{COUNTER_INSTRUCTIONS}}', counterInstructions);
